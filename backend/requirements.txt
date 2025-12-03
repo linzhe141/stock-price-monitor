@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+akshare
+apscheduler
+requests
+pandas
