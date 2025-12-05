@@ -57,6 +57,11 @@ def update_settings(settings: dict):
 def reorder_stocks(data: dict):
     return monitor.reorder_stocks(data.get("stocks", []))
 
+# 设置重点关注
+@app.post("/stocks/focus/{code}")
+def set_focused_stock(code: str):
+    return monitor.set_focused_stock(code)
+
 # 预警相关 API
 @app.post("/alerts/{code}")
 def set_alert(code: str, alert_config: dict):

@@ -188,6 +188,59 @@ ipcMain.on("update-tray", (_event, text) => {
     tray.setToolTip(text);
   }
 });
+ipcMain.on("update-tray-icon", (_event, data) => {
+  if (!tray) return;
+  try {
+    const change = parseFloat(data.change);
+    const isUp = change >= 0;
+    const sign = isUp ? "+" : "";
+    const size = 16;
+    const pixels = Buffer.alloc(size * size * 4);
+    const bgColor = { b: 40, g: 40, r: 40, a: 255 };
+    const upColor = { b: 79, g: 77, r: 255, a: 255 };
+    const downColor = { b: 26, g: 196, r: 82, a: 255 };
+    const barColor = isUp ? upColor : downColor;
+    const maxChange = 10;
+    const absChange = Math.min(Math.abs(change), maxChange);
+    const barHeight = Math.max(2, Math.round(absChange / maxChange * (size - 4)));
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const offset = (y * size + x) * 4;
+        let color = bgColor;
+        const barWidth = 8;
+        const barLeft = (size - barWidth) / 2;
+        const barRight = barLeft + barWidth;
+        if (x >= barLeft && x < barRight) {
+          if (isUp) {
+            const barTop = size - 2 - barHeight;
+            if (y >= barTop && y < size - 2) {
+              color = barColor;
+            }
+          } else {
+            if (y >= 2 && y < 2 + barHeight) {
+              color = barColor;
+            }
+          }
+        }
+        if (y === Math.floor(size / 2) && x >= 1 && x < size - 1) {
+          color = { b: 100, g: 100, r: 100, a: 255 };
+        }
+        pixels[offset] = color.b;
+        pixels[offset + 1] = color.g;
+        pixels[offset + 2] = color.r;
+        pixels[offset + 3] = color.a;
+      }
+    }
+    const icon = nativeImage.createFromBuffer(pixels, {
+      width: size,
+      height: size
+    });
+    tray.setImage(icon);
+    tray.setToolTip(`${data.name}: ${data.price} (${sign}${change.toFixed(2)}%)`);
+  } catch (e) {
+    console.error("更新托盘图标失败:", e);
+  }
+});
 ipcMain.on("update-float-window", (_event, data) => {
   if (floatWin && !floatWin.isDestroyed()) {
     floatWin.webContents.send("stock-data-update", data);

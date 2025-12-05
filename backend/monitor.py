@@ -33,12 +33,11 @@ class StockMonitor:
         self.stocks: List[str] = []
         self.data: Dict[str, dict] = {}
         self.settings: Dict = DEFAULT_SETTINGS.copy()
-        # 预警配置: {code: {take_profit, stop_loss, change_alert, enabled}}
         self.alerts: Dict[str, dict] = {}
-        # 预警冷却记录: {code: last_alert_time}
         self.alert_cooldowns: Dict[str, float] = {}
-        # 触发的预警列表
         self.triggered_alerts: List[dict] = []
+        # 重点关注的股票代码
+        self.focused_stock: Optional[str] = None
         
         self._load_data()
     
@@ -49,13 +48,14 @@ class StockMonitor:
         """从本地文件加载数据"""
         self._ensure_data_dir()
         
-        # 加载股票列表
+        # 加载股票列表和重点关注
         if STOCKS_FILE.exists():
             try:
                 with open(STOCKS_FILE, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.stocks = data.get('stocks', [])
-                    print(f"已加载 {len(self.stocks)} 只股票")
+                    self.focused_stock = data.get('focused_stock')
+                    print(f"已加载 {len(self.stocks)} 只股票, 重点关注: {self.focused_stock}")
             except Exception as e:
                 print(f"加载股票列表失败: {e}")
         
@@ -82,7 +82,10 @@ class StockMonitor:
         self._ensure_data_dir()
         try:
             with open(STOCKS_FILE, 'w', encoding='utf-8') as f:
-                json.dump({'stocks': self.stocks}, f, ensure_ascii=False, indent=2)
+                json.dump({
+                    'stocks': self.stocks,
+                    'focused_stock': self.focused_stock
+                }, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"保存股票列表失败: {e}")
     
@@ -154,7 +157,29 @@ class StockMonitor:
         return {"status": "success", "message": "排序已更新"}
 
     def get_stocks(self):
-        return {"stocks": self.stocks, "data": self.data, "alerts": self.alerts}
+        # 获取重点关注的股票（默认第一个）
+        focused = self.focused_stock
+        if not focused and self.stocks:
+            focused = self.stocks[0]
+        
+        # 获取重点关注股票的数据
+        focused_data = None
+        if focused and focused in self.data:
+            focused_data = self.data[focused]
+        
+        return {
+            "stocks": self.stocks,
+            "data": self.data,
+            "alerts": self.alerts,
+            "focused_stock": focused,
+            "focused_data": focused_data
+        }
+    
+    def set_focused_stock(self, code: str):
+        """设置重点关注的股票"""
+        self.focused_stock = code
+        self._save_stocks()
+        return {"status": "success", "message": f"已设置 {code} 为重点关注"}
 
     # ========== 预警管理 ==========
     def set_alert(self, code: str, alert_config: dict):

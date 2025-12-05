@@ -91,6 +91,11 @@
               <td class="px-4 py-4 text-sm text-slate-500">{{ stock.time }}</td>
               <td class="px-4 py-4 text-center">
                 <div class="flex items-center justify-center gap-2">
+                  <button @click="handleSetFocus(stock.code)" 
+                    :class="focusedStock === stock.code ? 'bg-amber-100 text-amber-600 border-amber-300' : 'text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-500'"
+                    class="px-2 py-1 text-xs border rounded transition-colors" :title="t('focus')">
+                    ⭐
+                  </button>
                   <button @click="openAlertModal(stock)" class="px-2 py-1 text-xs text-blue-500 border border-blue-200 rounded hover:bg-blue-50 transition-colors">
                     {{ t('alert') }}
                   </button>
@@ -164,7 +169,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { getStocks, addStock, removeStock, getSettings, reorderStocks, setAlert, getTriggeredAlerts } from '../api'
+import { getStocks, addStock, removeStock, getSettings, reorderStocks, setAlert, getTriggeredAlerts, setFocusedStock } from '../api'
 
 const emit = defineEmits(['openSettings'])
 
@@ -176,6 +181,7 @@ const loading = ref(false)
 const errorMsg = ref('')
 const refreshInterval = ref(5)
 const alertNotifications = ref<any[]>([])
+const focusedStock = ref<string | null>(null)
 
 type Lang = 'en' | 'zh'
 const currentLang = ref<Lang>('zh')
@@ -201,7 +207,7 @@ const translations: Record<Lang, Record<string, string>> = {
   en: {
     title: 'Stock Monitor',
     placeholder: 'Stock Code (e.g., 600519)',
-    add: 'Add', adding: 'Adding...', remove: 'Remove', alert: 'Alert',
+    add: 'Add', adding: 'Adding...', remove: 'Remove', alert: 'Alert', focus: 'Focus',
     empty: 'No stocks monitored. Add one to start.',
     col_code: 'Code', col_name: 'Name', col_price: 'Price', col_change: 'Change',
     col_high: 'High', col_low: 'Low', col_time: 'Time', col_action: 'Action',
@@ -216,7 +222,7 @@ const translations: Record<Lang, Record<string, string>> = {
   zh: {
     title: '股票监控助手',
     placeholder: '股票代码 (如 600519)',
-    add: '添加', adding: '添加中...', remove: '删除', alert: '预警',
+    add: '添加', adding: '添加中...', remove: '删除', alert: '预警', focus: '关注',
     empty: '暂无监控股票，请添加。',
     col_code: '代码', col_name: '名称', col_price: '当前价', col_change: '涨跌幅',
     col_high: '最高', col_low: '最低', col_time: '时间', col_action: '操作',
@@ -293,11 +299,33 @@ const dismissAlert = (index: number) => {
   alertNotifications.value.splice(index, 1)
 }
 
-// 更新托盘
+// 更新托盘（文字提示）
 const updateTray = () => {
   if (stockData.value.length > 0) {
     const summary = stockData.value.slice(0, 3).map(s => `${s.name}: ${s.price} (${s.change_percent}%)`).join('\n')
     ;(window as any).ipcRenderer?.send('update-tray', summary)
+  }
+}
+
+// 更新托盘图标（显示重点关注股票的涨跌幅）
+const updateTrayIcon = (focusedData: any) => {
+  if (focusedData) {
+    ;(window as any).ipcRenderer?.send('update-tray-icon', {
+      change: focusedData.change_percent,
+      price: focusedData.price,
+      name: focusedData.name
+    })
+  }
+}
+
+// 设置重点关注
+const handleSetFocus = async (code: string) => {
+  await setFocusedStock(code)
+  focusedStock.value = code
+  // 立即更新托盘图标
+  const stock = stockData.value.find(s => s.code === code)
+  if (stock) {
+    updateTrayIcon(stock)
   }
 }
 
@@ -309,7 +337,13 @@ const fetchData = async () => {
     const orderedData = res.stocks.map((code: string) => res.data[code]).filter(Boolean)
     stockData.value = orderedData
     alerts.value = res.alerts || {}
+    focusedStock.value = res.focused_stock || (res.stocks.length > 0 ? res.stocks[0] : null)
+    
     updateTray()
+    // 更新托盘图标
+    if (res.focused_data) {
+      updateTrayIcon(res.focused_data)
+    }
   } catch (error) {
     console.error("获取数据失败:", error)
   }

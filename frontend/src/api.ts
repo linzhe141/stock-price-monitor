@@ -37,6 +37,12 @@ export const reorderStocks = async (stocks: string[]) => {
   return response.data;
 };
 
+// 设置重点关注
+export const setFocusedStock = async (code: string) => {
+  const response = await api.post(`/stocks/focus/${code}`);
+  return response.data;
+};
+
 // 设置股票预警
 export const setAlert = async (code: string, alertConfig: Record<string, any>) => {
   const response = await api.post(`/alerts/${code}`, alertConfig);
