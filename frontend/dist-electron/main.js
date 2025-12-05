@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow, shell, nativeImage, Tray, Menu, screen } from "electron";
+import { app, ipcMain, Notification, BrowserWindow, shell, nativeImage, Tray, Menu, screen } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
@@ -201,7 +201,22 @@ ipcMain.on("close-float-window", () => {
     console.log("悬浮窗已关闭");
   }
 });
-ipcMain.on("float-window-drag", () => {
+ipcMain.on("show-notification", (_event, data) => {
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      title: data.title,
+      body: data.body,
+      icon: getTrayIconPath()
+    });
+    notification.on("click", () => {
+      if (win) {
+        win.show();
+        win.focus();
+      }
+    });
+    notification.show();
+    console.log("系统通知已发送:", data.title);
+  }
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

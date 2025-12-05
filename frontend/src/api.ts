@@ -31,4 +31,28 @@ export const updateSettings = async (settings: Record<string, any>) => {
   return response.data;
 };
 
+// 重新排序股票
+export const reorderStocks = async (stocks: string[]) => {
+  const response = await api.post('/stocks/reorder', { stocks });
+  return response.data;
+};
+
+// 设置股票预警
+export const setAlert = async (code: string, alertConfig: Record<string, any>) => {
+  const response = await api.post(`/alerts/${code}`, alertConfig);
+  return response.data;
+};
+
+// 移除股票预警
+export const removeAlert = async (code: string) => {
+  const response = await api.delete(`/alerts/${code}`);
+  return response.data;
+};
+
+// 获取触发的预警
+export const getTriggeredAlerts = async () => {
+  const response = await api.get('/alerts/triggered');
+  return response.data;
+};
+
 export default api;

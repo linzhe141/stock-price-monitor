@@ -1,6 +1,8 @@
 import time
 import json
-from typing import List, Dict
+import requests
+from typing import List, Dict, Optional
+from datetime import datetime
 import os
 from pathlib import Path
 
@@ -8,13 +10,14 @@ from pathlib import Path
 CONFIG_DIR = Path(__file__).parent / "data"
 STOCKS_FILE = CONFIG_DIR / "stocks.json"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
+ALERTS_FILE = CONFIG_DIR / "alerts.json"
 
 # 默认设置
 DEFAULT_SETTINGS = {
-    "refresh_interval": 5,  # 刷新间隔（秒）
-    "pushplus_token": "",   # PushPlus 推送 Token
-    "dingtalk_webhook": "", # 钉钉机器人 Webhook
-    "alert_cooldown": 300,  # 预警冷却时间（秒）
+    "refresh_interval": 5,
+    "pushplus_token": "",
+    "dingtalk_webhook": "",
+    "alert_cooldown": 300,
 }
 
 class StockMonitor:
@@ -24,19 +27,22 @@ class StockMonitor:
             os.environ.pop(k, None)
         os.environ["NO_PROXY"] = "*"
         os.environ["no_proxy"] = "*"
-        
         print("代理设置已清除")
 
         self.running = False
         self.stocks: List[str] = []
         self.data: Dict[str, dict] = {}
         self.settings: Dict = DEFAULT_SETTINGS.copy()
+        # 预警配置: {code: {take_profit, stop_loss, change_alert, enabled}}
+        self.alerts: Dict[str, dict] = {}
+        # 预警冷却记录: {code: last_alert_time}
+        self.alert_cooldowns: Dict[str, float] = {}
+        # 触发的预警列表
+        self.triggered_alerts: List[dict] = []
         
-        # 加载本地缓存
         self._load_data()
     
     def _ensure_data_dir(self):
-        """确保数据目录存在"""
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     
     def _load_data(self):
@@ -62,9 +68,17 @@ class StockMonitor:
                     print("已加载设置")
             except Exception as e:
                 print(f"加载设置失败: {e}")
+        
+        # 加载预警配置
+        if ALERTS_FILE.exists():
+            try:
+                with open(ALERTS_FILE, 'r', encoding='utf-8') as f:
+                    self.alerts = json.load(f)
+                    print(f"已加载 {len(self.alerts)} 个预警配置")
+            except Exception as e:
+                print(f"加载预警配置失败: {e}")
     
     def _save_stocks(self):
-        """保存股票列表到本地"""
         self._ensure_data_dir()
         try:
             with open(STOCKS_FILE, 'w', encoding='utf-8') as f:
@@ -73,7 +87,6 @@ class StockMonitor:
             print(f"保存股票列表失败: {e}")
     
     def _save_settings(self):
-        """保存设置到本地"""
         self._ensure_data_dir()
         try:
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
@@ -81,55 +94,185 @@ class StockMonitor:
         except Exception as e:
             print(f"保存设置失败: {e}")
     
+    def _save_alerts(self):
+        self._ensure_data_dir()
+        try:
+            with open(ALERTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.alerts, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存预警配置失败: {e}")
+    
+    # ========== 设置相关 ==========
     def get_settings(self):
-        """获取当前设置"""
         return {"status": "success", "settings": self.settings}
     
     def update_settings(self, new_settings: Dict):
-        """更新设置"""
         self.settings.update(new_settings)
         self._save_settings()
         return {"status": "success", "message": "设置已更新", "settings": self.settings}
 
+    # ========== 股票管理 ==========
     def add_stock(self, code: str):
         if code not in self.stocks:
             self.stocks.append(code)
-            self._save_stocks()  # 保存到本地
+            self._save_stocks()
             return {"status": "success", "message": f"已添加 {code}"}
         return {"status": "error", "message": "股票已存在"}
 
     def remove_stock(self, code: str):
+        removed = False
         if code in self.stocks:
             self.stocks.remove(code)
-            if code in self.data:
-                del self.data[code]
-            self._save_stocks()  # 保存到本地
+            removed = True
+        else:
+            for s in self.stocks[:]:
+                if s.endswith(code) or code.endswith(s):
+                    self.stocks.remove(s)
+                    removed = True
+                    break
+        
+        # 清理数据和预警
+        if code in self.data:
+            del self.data[code]
+        if code in self.alerts:
+            del self.alerts[code]
+            self._save_alerts()
+        
+        keys_to_remove = [k for k in self.data.keys() if k.endswith(code) or code.endswith(k)]
+        for k in keys_to_remove:
+            del self.data[k]
+        
+        if removed:
+            self._save_stocks()
             return {"status": "success", "message": f"已删除 {code}"}
         return {"status": "error", "message": "股票不存在"}
 
-    def get_stocks(self):
-        return {"stocks": self.stocks, "data": self.data}
+    def reorder_stocks(self, new_order: List[str]):
+        """重新排序股票列表"""
+        self.stocks = new_order
+        self._save_stocks()
+        return {"status": "success", "message": "排序已更新"}
 
+    def get_stocks(self):
+        return {"stocks": self.stocks, "data": self.data, "alerts": self.alerts}
+
+    # ========== 预警管理 ==========
+    def set_alert(self, code: str, alert_config: dict):
+        """设置股票预警"""
+        self.alerts[code] = {
+            "take_profit": alert_config.get("take_profit"),  # 止盈价
+            "stop_loss": alert_config.get("stop_loss"),      # 止损价
+            "change_alert": alert_config.get("change_alert"), # 涨跌幅预警(%)
+            "enabled": alert_config.get("enabled", True),
+        }
+        self._save_alerts()
+        return {"status": "success", "message": f"已设置 {code} 的预警"}
+    
+    def remove_alert(self, code: str):
+        """移除股票预警"""
+        if code in self.alerts:
+            del self.alerts[code]
+            self._save_alerts()
+            return {"status": "success", "message": f"已移除 {code} 的预警"}
+        return {"status": "error", "message": "预警不存在"}
+    
+    def get_triggered_alerts(self):
+        """获取触发的预警"""
+        alerts = self.triggered_alerts.copy()
+        self.triggered_alerts.clear()
+        return {"status": "success", "alerts": alerts}
+    
+    def _check_alerts(self, code: str, stock_data: dict):
+        """检查是否触发预警"""
+        if code not in self.alerts:
+            return
+        
+        alert_config = self.alerts[code]
+        if not alert_config.get("enabled", True):
+            return
+        
+        # 检查冷却时间
+        now = time.time()
+        cooldown = self.settings.get("alert_cooldown", 300)
+        if code in self.alert_cooldowns:
+            if now - self.alert_cooldowns[code] < cooldown:
+                return
+        
+        price = float(stock_data["price"])
+        change = float(stock_data["change_percent"])
+        triggered = []
+        
+        # 止盈检查
+        take_profit = alert_config.get("take_profit")
+        if take_profit and price >= float(take_profit):
+            triggered.append(f"🎯 止盈触发: 当前价 {price} >= 止盈价 {take_profit}")
+        
+        # 止损检查
+        stop_loss = alert_config.get("stop_loss")
+        if stop_loss and price <= float(stop_loss):
+            triggered.append(f"⚠️ 止损触发: 当前价 {price} <= 止损价 {stop_loss}")
+        
+        # 涨跌幅检查
+        change_alert = alert_config.get("change_alert")
+        if change_alert and abs(change) >= float(change_alert):
+            direction = "涨" if change > 0 else "跌"
+            triggered.append(f"📊 异动提醒: {direction}幅 {change}% >= {change_alert}%")
+        
+        if triggered:
+            self.alert_cooldowns[code] = now
+            alert_info = {
+                "code": code,
+                "name": stock_data.get("name", code),
+                "price": price,
+                "change": change,
+                "messages": triggered,
+                "time": datetime.now().strftime("%H:%M:%S"),
+            }
+            self.triggered_alerts.append(alert_info)
+            print(f"预警触发: {alert_info}")
+            self._send_notification(alert_info)
+    
+    def _send_notification(self, alert_info: dict):
+        """发送推送通知"""
+        title = f"股票预警 - {alert_info['name']}"
+        content = "\n".join(alert_info["messages"])
+        content += f"\n当前价: {alert_info['price']} | 涨跌幅: {alert_info['change']}%"
+        
+        # PushPlus 推送
+        token = self.settings.get("pushplus_token")
+        if token:
+            try:
+                requests.post(
+                    "http://www.pushplus.plus/send",
+                    json={"token": token, "title": title, "content": content},
+                    timeout=5
+                )
+            except Exception as e:
+                print(f"PushPlus 推送失败: {e}")
+        
+        # 钉钉推送
+        webhook = self.settings.get("dingtalk_webhook")
+        if webhook:
+            try:
+                requests.post(
+                    webhook,
+                    json={"msgtype": "text", "text": {"content": f"{title}\n{content}"}},
+                    timeout=5
+                )
+            except Exception as e:
+                print(f"钉钉推送失败: {e}")
+
+    # ========== 数据获取 ==========
     def fetch_data(self):
         if not self.stocks:
             return
         
-        # print(f"Fetching data for: {self.stocks}")
         try:
-            # Use Sina API
-            # Format: http://hq.sinajs.cn/list=sh600519,sz000001
-            # We need to ensure codes have prefixes (sh/sz). 
-            # Frontend sends "sh600519" or "600519". If no prefix, we might need to guess or require it.
-            # For now, let's assume user provides prefix or we try to add it.
-            # Actually, user input "600021" (sh) or "000001" (sz).
-            # Simple heuristic: 6xx -> sh, 0xx/3xx -> sz. 4xx/8xx -> bj (Sina might be different for bj)
-            
             query_list = []
             for code in self.stocks:
                 if code.startswith("sh") or code.startswith("sz") or code.startswith("bj"):
                     query_list.append(code)
                 else:
-                    # Guess prefix
                     if code.startswith("6"):
                         query_list.append(f"sh{code}")
                     elif code.startswith("0") or code.startswith("3"):
@@ -137,50 +280,34 @@ class StockMonitor:
                     elif code.startswith("4") or code.startswith("8"):
                         query_list.append(f"bj{code}")
                     else:
-                        query_list.append(code) # Try as is
+                        query_list.append(code)
 
             codes_str = ",".join(query_list)
             url = f"http://hq.sinajs.cn/list={codes_str}"
             headers = {
                 "Referer": "https://finance.sina.com.cn/",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
             
-            # Use explicit empty proxies to bypass system proxy settings
-            import requests
             resp = requests.get(url, headers=headers, timeout=5, proxies={"http": None, "https": None})
-            
-            # Encoding is usually GBK
             content = resp.content.decode('gbk')
             
-            # Parse response
-            # var hq_str_sh600519="贵州茅台,1435.810,1436.030,1428.290,1435.970,1428.000,1428.280,1428.310,..."
             lines = content.strip().split('\n')
             for line in lines:
-                if not line: continue
-                # line: var hq_str_sh600519="Name,..."
+                if not line:
+                    continue
                 parts = line.split('=')
-                if len(parts) < 2: continue
+                if len(parts) < 2:
+                    continue
                 
-                # Extract code from var name
-                # var hq_str_sh600519 -> sh600519
                 code_part = parts[0].split('_')[-1]
-                
                 data_part = parts[1].strip('"')
-                if not data_part: continue
+                if not data_part:
+                    continue
                 
                 fields = data_part.split(',')
-                if len(fields) < 30: continue
-                
-                # Sina Fields:
-                # 0: Name
-                # 1: Open
-                # 2: PreClose
-                # 3: Price
-                # 4: High
-                # 5: Low
-                # 30: Date
-                # 31: Time
+                if len(fields) < 30:
+                    continue
                 
                 name = fields[0]
                 pre_close = float(fields[2])
@@ -189,20 +316,9 @@ class StockMonitor:
                 low = fields[5]
                 time_str = fields[31]
                 
-                # Calculate change percent
                 change_percent = 0.0
                 if pre_close > 0:
                     change_percent = (price - pre_close) / pre_close * 100
-                
-                # Map back to original code if possible, or use the one from Sina
-                # We stored "600021" in self.stocks, but query was "sh600021"
-                # We need to update self.data with the key that matches self.stocks or just use the full code
-                # Let's use the code from Sina (with prefix) as the key in data, 
-                # but we need to ensure frontend knows how to display it.
-                # Or we strip prefix if the original didn't have it.
-                
-                # Better: Update data with the code used in query (with prefix) 
-                # AND ensure add_stock supports adding with/without prefix.
                 
                 stock_data = {
                     "code": code_part,
@@ -212,57 +328,35 @@ class StockMonitor:
                     "high": high,
                     "low": low,
                     "open": fields[1],
+                    "pre_close": f"{pre_close:.2f}",
                     "volume": fields[8],
                     "amount": fields[9],
                     "time": time_str
                 }
                 
-                # Store data. 
-                # We update self.stocks to use the canonical code (with prefix) so delete works reliably.
                 if code_part not in self.stocks:
-                    # Check if we have the raw version
                     raw_code = code_part[2:]
                     if raw_code in self.stocks:
                         self.stocks.remove(raw_code)
                         self.stocks.append(code_part)
+                        self._save_stocks()
                 
                 self.data[code_part] = stock_data
                 
+                # 检查预警
+                self._check_alerts(code_part, stock_data)
+                
         except Exception as e:
-            print(f"Error fetching data: {e}")
-
-    def remove_stock_flexible(self, code: str):
-        """灵活删除股票（支持带前缀和不带前缀）"""
-        removed = False
-        if code in self.stocks:
-            self.stocks.remove(code)
-            removed = True
-        else:
-            # 尝试匹配带/不带前缀的情况
-            for s in self.stocks[:]:
-                if s.endswith(code) or code.endswith(s):
-                    self.stocks.remove(s)
-                    removed = True
-                    break
-        
-        if code in self.data:
-            del self.data[code]
-        
-        # 清理相关的数据
-        keys_to_remove = [k for k in self.data.keys() if k.endswith(code) or code.endswith(k)]
-        for k in keys_to_remove:
-            del self.data[k]
-        
-        if removed:
-            self._save_stocks()  # 保存到本地
-
-
+            print(f"获取数据失败: {e}")
 
     def start(self):
         self.running = True
-        print("Monitor started")
+        print("监控已启动")
         while self.running:
             if self.stocks:
                 self.fetch_data()
-            time.sleep(5)
-
+            time.sleep(self.settings.get("refresh_interval", 5))
+    
+    def stop(self):
+        self.running = False
+        print("监控已停止")

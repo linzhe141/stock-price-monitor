@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   invoke: (channel, ...args) => {
     return ipcRenderer.invoke(channel, ...args)
   },
+  // 发送系统通知
+  showNotification: (title, body) => {
+    ipcRenderer.send('show-notification', { title, body })
+  },
 })
 
 console.log('Preload 脚本加载成功')

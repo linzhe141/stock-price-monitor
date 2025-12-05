@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, shell, nativeImage, screen, Notification } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -264,9 +264,26 @@ ipcMain.on('close-float-window', () => {
   }
 })
 
-// IPC: 开始拖拽悬浮窗
-ipcMain.on('float-window-drag', () => {
-  // 这个由渲染进程的 -webkit-app-region: drag 处理
+// IPC: 发送系统通知
+ipcMain.on('show-notification', (_event, data: { title: string; body: string }) => {
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      title: data.title,
+      body: data.body,
+      icon: getTrayIconPath(),
+    })
+    
+    // 点击通知时显示主窗口
+    notification.on('click', () => {
+      if (win) {
+        win.show()
+        win.focus()
+      }
+    })
+    
+    notification.show()
+    console.log('系统通知已发送:', data.title)
+  }
 })
 
 app.on('window-all-closed', () => {

@@ -52,5 +52,23 @@ def get_settings():
 def update_settings(settings: dict):
     return monitor.update_settings(settings)
 
+# 股票排序 API
+@app.post("/stocks/reorder")
+def reorder_stocks(data: dict):
+    return monitor.reorder_stocks(data.get("stocks", []))
+
+# 预警相关 API
+@app.post("/alerts/{code}")
+def set_alert(code: str, alert_config: dict):
+    return monitor.set_alert(code, alert_config)
+
+@app.delete("/alerts/{code}")
+def remove_alert(code: str):
+    return monitor.remove_alert(code)
+
+@app.get("/alerts/triggered")
+def get_triggered_alerts():
+    return monitor.get_triggered_alerts()
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
