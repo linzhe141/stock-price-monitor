@@ -21,8 +21,8 @@ let tray: Tray | null = null
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
 // 悬浮窗配置
-const FLOAT_WIN_WIDTH = 180
-const FLOAT_WIN_HEIGHT = 120
+const FLOAT_WIN_WIDTH = 200
+const FLOAT_WIN_HEIGHT = 150
 const EDGE_MARGIN = 0  // 吸边时距离屏幕边缘的距离
 const EDGE_THRESHOLD = 20  // 触发吸边的阈值
 
@@ -221,8 +221,7 @@ function createWindow() {
   })
 
   // 最小化时隐藏到托盘
-  win.on('minimize', (event: Electron.Event) => {
-    event.preventDefault()
+  win.on('minimize', () => {
     win?.hide()
   })
 

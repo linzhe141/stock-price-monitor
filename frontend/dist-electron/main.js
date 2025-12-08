@@ -10,8 +10,8 @@ let win = null;
 let floatWin = null;
 let tray = null;
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const FLOAT_WIN_WIDTH = 180;
-const FLOAT_WIN_HEIGHT = 120;
+const FLOAT_WIN_WIDTH = 200;
+const FLOAT_WIN_HEIGHT = 150;
 const EDGE_MARGIN = 0;
 const EDGE_THRESHOLD = 20;
 function getTrayIconPath() {
@@ -168,8 +168,7 @@ function createWindow() {
       }, 1e3);
     }
   });
-  win.on("minimize", (event) => {
-    event.preventDefault();
+  win.on("minimize", () => {
     win?.hide();
   });
   win.on("close", (event) => {

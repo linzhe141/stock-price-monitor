@@ -1,7 +1,9 @@
 {
   "stocks": [
     "sz002402",
-    "sh600021"
+    "sh600021",
+    "sz000592",
+    "reorder"
   ],
-  "focused_stock": "sh600021"
+  "focused_stock": "sz000592"
 }

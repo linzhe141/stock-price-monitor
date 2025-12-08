@@ -61,14 +61,15 @@
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-for="(stock, index) in stockData" :key="stock.code" 
-              class="hover:bg-slate-50 transition-colors"
+              class="hover:bg-slate-50 transition-colors cursor-pointer"
               draggable="true"
               @dragstart="handleDragStart(index)"
               @dragover.prevent="handleDragOver(index)"
               @drop="handleDrop(index)"
-              @dragend="handleDragEnd">
+              @dragend="handleDragEnd"
+              @click="handleRowClick(stock.code, $event)">
               <!-- 拖拽手柄 -->
-              <td class="px-2 py-4 cursor-move text-slate-300 hover:text-slate-500">
+              <td class="px-2 py-4 cursor-move text-slate-300 hover:text-slate-500" @click.stop>
                 <span class="text-lg">⋮⋮</span>
               </td>
               <td class="px-4 py-4 text-sm font-mono text-slate-700">
@@ -89,7 +90,7 @@
               <td class="px-4 py-4 text-sm text-right text-slate-600">{{ stock.high }}</td>
               <td class="px-4 py-4 text-sm text-right text-slate-600">{{ stock.low }}</td>
               <td class="px-4 py-4 text-sm text-slate-500">{{ stock.time }}</td>
-              <td class="px-4 py-4 text-center">
+              <td class="px-4 py-4 text-center" @click.stop>
                 <div class="flex items-center justify-center gap-2">
                   <button @click="handleSetFocus(stock.code)" 
                     :class="focusedStock === stock.code ? 'bg-amber-100 text-amber-600 border-amber-300' : 'text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-500'"
@@ -171,7 +172,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getStocks, addStock, removeStock, getSettings, reorderStocks, setAlert, getTriggeredAlerts, setFocusedStock } from '../api'
 
-const emit = defineEmits(['openSettings'])
+const emit = defineEmits(['openSettings', 'openDetail'])
 
 // 响应式状态
 const newStockCode = ref('')
@@ -327,6 +328,13 @@ const handleSetFocus = async (code: string) => {
   if (stock) {
     updateTrayIcon(stock)
   }
+}
+
+// 点击行打开详情
+const handleRowClick = (code: string, event: MouseEvent) => {
+  // 避免点击按钮时触发
+  if ((event.target as HTMLElement).closest('button')) return
+  emit('openDetail', code)
 }
 
 // 获取数据

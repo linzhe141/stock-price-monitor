@@ -61,4 +61,28 @@ export const getTriggeredAlerts = async () => {
   return response.data;
 };
 
+// 获取股票详情（分时、K线、资金流向）
+export const getStockDetail = async (code: string) => {
+  const response = await api.get(`/stock/${code}/detail`);
+  return response.data;
+};
+
+// 获取分时数据
+export const getMinuteData = async (code: string) => {
+  const response = await api.get(`/stock/${code}/minute`);
+  return response.data;
+};
+
+// 获取K线数据
+export const getKlineData = async (code: string, period = 'day', count = 120) => {
+  const response = await api.get(`/stock/${code}/kline`, { params: { period, count } });
+  return response.data;
+};
+
+// 获取资金流向
+export const getMoneyFlow = async (code: string) => {
+  const response = await api.get(`/stock/${code}/money-flow`);
+  return response.data;
+};
+
 export default api;

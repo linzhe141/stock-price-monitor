@@ -75,5 +75,22 @@ def remove_alert(code: str):
 def get_triggered_alerts():
     return monitor.get_triggered_alerts()
 
+# 股票详情数据 API
+@app.get("/stock/{code}/detail")
+def get_stock_detail(code: str):
+    return monitor.get_stock_detail(code)
+
+@app.get("/stock/{code}/minute")
+def get_minute_data(code: str):
+    return monitor.get_minute_data(code)
+
+@app.get("/stock/{code}/kline")
+def get_kline_data(code: str, period: str = "day", count: int = 120):
+    return monitor.get_kline_data(code, period, count)
+
+@app.get("/stock/{code}/money-flow")
+def get_money_flow(code: str):
+    return monitor.get_money_flow(code)
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

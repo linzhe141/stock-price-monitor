@@ -374,6 +374,135 @@ class StockMonitor:
         except Exception as e:
             print(f"获取数据失败: {e}")
 
+    def _normalize_code(self, code: str) -> str:
+        """标准化股票代码（添加市场前缀）"""
+        if code.startswith("sh") or code.startswith("sz") or code.startswith("bj"):
+            return code
+        if code.startswith("6"):
+            return f"sh{code}"
+        elif code.startswith("0") or code.startswith("3"):
+            return f"sz{code}"
+        elif code.startswith("4") or code.startswith("8"):
+            return f"bj{code}"
+        return code
+
+    def get_minute_data(self, code: str) -> dict:
+        """获取分时数据（当天每分钟价格）"""
+        try:
+            code = self._normalize_code(code)
+            url = f"https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_{code}_data=/CN_MarketDataService.getKLineData?symbol={code}&scale=1&ma=no&datalen=240"
+            headers = {
+                "Referer": "https://finance.sina.com.cn/",
+                "User-Agent": "Mozilla/5.0"
+            }
+            resp = requests.get(url, headers=headers, timeout=10, proxies={"http": None, "https": None})
+            content = resp.text
+            
+            # 解析 JSONP 响应
+            import re
+            match = re.search(r'\[.*\]', content)
+            if match:
+                import json
+                data = json.loads(match.group())
+                # 返回分时数据：时间、价格、成交量
+                result = []
+                for item in data:
+                    result.append({
+                        "time": item.get("day", "")[-8:],  # HH:MM:SS
+                        "price": float(item.get("close", 0)),
+                        "volume": int(item.get("volume", 0)),
+                        "avg_price": float(item.get("ma_price5", 0)) if item.get("ma_price5") else None
+                    })
+                return {"status": "success", "data": result}
+            return {"status": "error", "message": "解析失败"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_kline_data(self, code: str, period: str = "day", count: int = 120) -> dict:
+        """
+        获取K线数据
+        period: day(日K), week(周K), month(月K)
+        """
+        try:
+            code = self._normalize_code(code)
+            scale_map = {"day": 240, "week": 1200, "month": 7200}
+            scale = scale_map.get(period, 240)
+            
+            url = f"https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_{code}_kline=/CN_MarketDataService.getKLineData?symbol={code}&scale={scale}&ma=no&datalen={count}"
+            headers = {
+                "Referer": "https://finance.sina.com.cn/",
+                "User-Agent": "Mozilla/5.0"
+            }
+            resp = requests.get(url, headers=headers, timeout=10, proxies={"http": None, "https": None})
+            content = resp.text
+            
+            import re
+            match = re.search(r'\[.*\]', content)
+            if match:
+                import json
+                data = json.loads(match.group())
+                result = []
+                for item in data:
+                    result.append({
+                        "date": item.get("day", ""),
+                        "open": float(item.get("open", 0)),
+                        "close": float(item.get("close", 0)),
+                        "high": float(item.get("high", 0)),
+                        "low": float(item.get("low", 0)),
+                        "volume": int(item.get("volume", 0)),
+                    })
+                return {"status": "success", "data": result}
+            return {"status": "error", "message": "解析失败"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_money_flow(self, code: str) -> dict:
+        """获取资金流向数据"""
+        try:
+            code = self._normalize_code(code)
+            # 使用东方财富资金流向接口
+            market = "1" if code.startswith("sh") else "0"
+            stock_code = code[2:]
+            url = f"https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?secid={market}.{stock_code}&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56&klt=1&lmt=0"
+            
+            headers = {"User-Agent": "Mozilla/5.0"}
+            resp = requests.get(url, headers=headers, timeout=10, proxies={"http": None, "https": None})
+            data = resp.json()
+            
+            if data.get("data") and data["data"].get("klines"):
+                result = []
+                for line in data["data"]["klines"]:
+                    parts = line.split(",")
+                    if len(parts) >= 6:
+                        result.append({
+                            "time": parts[0],
+                            "main_in": float(parts[1]),      # 主力流入
+                            "small_in": float(parts[2]),     # 小单流入
+                            "mid_in": float(parts[3]),       # 中单流入
+                            "big_in": float(parts[4]),       # 大单流入
+                            "super_in": float(parts[5]),     # 超大单流入
+                        })
+                return {"status": "success", "data": result}
+            return {"status": "error", "message": "无数据"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_stock_detail(self, code: str) -> dict:
+        """获取股票详细信息（包含分时、K线、资金流向）"""
+        code = self._normalize_code(code)
+        basic = self.data.get(code, {})
+        minute = self.get_minute_data(code)
+        kline = self.get_kline_data(code, "day", 60)
+        money_flow = self.get_money_flow(code)
+        
+        return {
+            "status": "success",
+            "basic": basic,
+            "minute": minute.get("data", []),
+            "kline": kline.get("data", []),
+            "money_flow": money_flow.get("data", [])
+        }
+
     def start(self):
         self.running = True
         print("监控已启动")
