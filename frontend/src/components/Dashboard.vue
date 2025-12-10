@@ -52,18 +52,19 @@
 
       <!-- 股票列表卡片 -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <table class="w-full">
+        <table class="w-full table-fixed">
           <thead>
             <tr class="bg-slate-50 border-b border-slate-100">
-              <th class="px-2 py-3 w-8"></th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_code') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_name') }}</th>
-              <th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_price') }}</th>
-              <th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_change') }}</th>
-              <th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_high') }}</th>
-              <th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_low') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_time') }}</th>
-              <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_action') }}</th>
+              <th class="w-8 px-1 py-3"></th>
+              <th class="w-24 px-2 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_code') }}</th>
+              <th class="w-20 px-2 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_name') }}</th>
+              <th class="w-20 px-2 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_price') }}</th>
+              <th class="w-20 px-2 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_change') }}</th>
+              <th class="w-16 px-2 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_high') }}</th>
+              <th class="w-16 px-2 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_low') }}</th>
+              <th class="w-20 px-2 py-3 text-right text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_amount') }}</th>
+              <th class="w-20 px-2 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_time') }}</th>
+              <th class="w-32 px-2 py-3 text-center text-xs font-semibold text-slate-500 uppercase">{{ $t('dashboard.col_action') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -75,46 +76,47 @@
               @drop="handleDrop(index)"
               @dragend="handleDragEnd"
               @click="handleRowClick(stock.code, $event)">
-              <!-- 拖拽手柄 -->
-              <td class="px-2 py-4 cursor-move text-slate-300 hover:text-slate-500" @click.stop>
-                <span class="text-lg">⋮⋮</span>
+              <!-- 拖拽手柄 - 优化样式 -->
+              <td class="px-1 py-3 cursor-move" @click.stop>
+                <span class="text-slate-400 hover:text-slate-600 text-sm font-bold tracking-tighter">⋮⋮</span>
               </td>
-              <td class="px-4 py-4 text-sm font-mono text-slate-700">
+              <td class="px-2 py-3 text-xs font-mono text-slate-600">
                 {{ stock.code }}
-                <span v-if="alerts[stock.code]?.enabled" class="ml-1 text-amber-500" title="已设置预警">🔔</span>
+                <span v-if="alerts[stock.code]?.enabled" class="ml-0.5 text-amber-500" title="已设置预警">🔔</span>
               </td>
-              <td class="px-4 py-4 text-sm font-medium text-slate-800">{{ stock.name }}</td>
-              <td class="px-4 py-4 text-sm text-right font-semibold" :class="getPriceClass(stock.change_percent)">
+              <td class="px-2 py-3 text-sm font-medium text-slate-800 truncate">{{ stock.name }}</td>
+              <td class="px-2 py-3 text-sm text-right font-semibold tabular-nums" :class="getPriceClass(stock.change_percent)">
                 {{ stock.price }}
               </td>
-              <td class="px-4 py-4 text-sm text-right font-medium" :class="getPriceClass(stock.change_percent)">
-                <span class="inline-flex items-center gap-1">
+              <td class="px-2 py-3 text-sm text-right font-medium tabular-nums" :class="getPriceClass(stock.change_percent)">
+                <span class="inline-flex items-center gap-0.5">
                   <span v-if="parseFloat(stock.change_percent) > 0">↑</span>
                   <span v-else-if="parseFloat(stock.change_percent) < 0">↓</span>
                   {{ stock.change_percent }}%
                 </span>
               </td>
-              <td class="px-4 py-4 text-sm text-right text-slate-600">{{ stock.high }}</td>
-              <td class="px-4 py-4 text-sm text-right text-slate-600">{{ stock.low }}</td>
-              <td class="px-4 py-4 text-sm text-slate-500">{{ stock.time }}</td>
-              <td class="px-4 py-4 text-center" @click.stop>
-                <div class="flex items-center justify-center gap-2">
+              <td class="px-2 py-3 text-sm text-right text-slate-600 tabular-nums">{{ stock.high }}</td>
+              <td class="px-2 py-3 text-sm text-right text-slate-600 tabular-nums">{{ stock.low }}</td>
+              <td class="px-2 py-3 text-xs text-right text-slate-500">{{ formatAmount(stock.amount) }}</td>
+              <td class="px-2 py-3 text-xs text-slate-500">{{ stock.time }}</td>
+              <td class="px-2 py-3 text-center" @click.stop>
+                <div class="flex items-center justify-center gap-1">
                   <button @click="handleSetFocus(stock.code)" 
                     :class="focusedStock === stock.code ? 'bg-amber-100 text-amber-600 border-amber-300' : 'text-slate-400 border-slate-200 hover:bg-amber-50 hover:text-amber-500'"
-                    class="px-2 py-1 text-xs border rounded transition-colors" :title="$t('dashboard.focus')">
+                    class="px-1.5 py-0.5 text-xs border rounded transition-colors" :title="$t('dashboard.focus')">
                     ⭐
                   </button>
-                  <button @click="openAlertModal(stock)" class="px-2 py-1 text-xs text-blue-500 border border-blue-200 rounded hover:bg-blue-50 transition-colors">
+                  <button @click="openAlertModal(stock)" class="px-1.5 py-0.5 text-xs text-blue-500 border border-blue-200 rounded hover:bg-blue-50 transition-colors">
                     {{ $t('dashboard.alert') }}
                   </button>
-                  <button @click="handleRemoveStock(stock.code)" class="px-2 py-1 text-xs text-slate-500 border border-slate-200 rounded hover:bg-red-50 hover:text-red-500 transition-colors">
+                  <button @click="handleRemoveStock(stock.code)" class="px-1.5 py-0.5 text-xs text-slate-500 border border-slate-200 rounded hover:bg-red-50 hover:text-red-500 transition-colors">
                     {{ $t('dashboard.remove') }}
                   </button>
                 </div>
               </td>
             </tr>
             <tr v-if="stockData.length === 0">
-              <td colspan="9" class="px-4 py-12 text-center text-slate-400 text-sm">{{ $t('dashboard.empty') }}</td>
+              <td colspan="10" class="px-4 py-12 text-center text-slate-400 text-sm">{{ $t('dashboard.empty') }}</td>
             </tr>
           </tbody>
         </table>
@@ -220,6 +222,14 @@ const getPriceClass = (changePercent: string) => {
   if (value > 0) return 'text-red-500'
   if (value < 0) return 'text-green-500'
   return 'text-slate-600'
+}
+
+// 格式化成交额
+const formatAmount = (amount: string) => {
+  const val = parseFloat(amount || '0')
+  if (val >= 100000000) return (val / 100000000).toFixed(2) + '亿'
+  if (val >= 10000) return (val / 10000).toFixed(0) + '万'
+  return val.toFixed(0)
 }
 
 // 拖拽排序
