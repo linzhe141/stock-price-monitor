@@ -63,7 +63,13 @@
           <div v-if="loading" class="flex items-center justify-center h-full text-slate-400">
             {{ $t('common.loading') }}
           </div>
-          <v-chart v-else-if="chartOption" :option="chartOption" autoresize class="w-full h-full" />
+          <v-chart 
+            v-else-if="chartOption" 
+            :option="chartOption" 
+            autoresize 
+            class="w-full h-full" 
+            @datazoom="handleDataZoom"
+          />
         </div>
       </div>
 
@@ -121,6 +127,10 @@ const activeTab = ref('minute')
 // 轮询定时器
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 const REFRESH_INTERVAL = 5000
+
+// 保存用户的缩放状态，刷新时保持视图位置
+const userZoomState = ref<{ start: number; end: number } | null>(null)
+const isFirstLoad = ref(true) // 是否首次加载
 
 const tabs = [
   { key: 'minute' },
@@ -204,12 +214,7 @@ const findTodayStartIndex = () => {
   return lastSplitIndex
 }
 
-// 获取今天的日期字符串
-const getTodayDate = () => {
-  if (minuteData.value.length === 0) return ''
-  // 取最后一条数据的日期作为今天
-  return minuteData.value[minuteData.value.length - 1].date || ''
-}
+
 
 // 计算均价线数据
 const calcAvgPrices = () => {
@@ -280,7 +285,6 @@ const getMinuteChartOption = () => {
   
   // 查找今天数据的起始点
   const todayStartIdx = findTodayStartIndex()
-  const todayDate = getTodayDate()
   
   // 构建 markLine 数据 - 昨收价水平线
   const priceMarkLine: any[] = [
@@ -318,15 +322,18 @@ const getMinuteChartOption = () => {
   // X轴标签间隔计算
   const labelInterval = Math.floor(times.length / 8)
   
-  // 计算默认显示范围：优先显示今天的数据
-  // 如果今天数据少于总数据的60%，则从今天开始前一点显示
+  // 计算显示范围：如果用户有缩放操作，保持用户的视图；否则使用默认范围
   const totalLen = times.length
   const todayDataLen = totalLen - todayStartIdx
   let startPercent = 0
   let endPercent = 100
   
-  if (todayStartIdx > 0 && todayDataLen < totalLen * 0.6) {
-    // 从今天数据前20个点开始显示（留一点昨天的数据做对比）
+  if (userZoomState.value) {
+    // 使用用户保存的缩放状态
+    startPercent = userZoomState.value.start
+    endPercent = userZoomState.value.end
+  } else if (isFirstLoad.value && todayStartIdx > 0 && todayDataLen < totalLen * 0.6) {
+    // 首次加载时，从今天数据前20个点开始显示
     const showStartIdx = Math.max(0, todayStartIdx - 20)
     startPercent = (showStartIdx / totalLen) * 100
   }
@@ -609,6 +616,17 @@ const getKlineChartOption = () => {
   }
 }
 
+// 处理图表缩放事件，保存用户的缩放状态
+const handleDataZoom = (params: any) => {
+  // 只在分时图时保存缩放状态
+  if (activeTab.value === 'minute') {
+    const batch = params.batch?.[0] || params
+    if (batch.start !== undefined && batch.end !== undefined) {
+      userZoomState.value = { start: batch.start, end: batch.end }
+    }
+  }
+}
+
 // 加载详情数据
 const loadData = async (showLoading = true) => {
   if (showLoading) loading.value = true
@@ -619,6 +637,10 @@ const loadData = async (showLoading = true) => {
       minuteData.value = res.minute || []
       klineData.value = res.kline || []
       moneyFlowData.value = res.money_flow || []
+      // 首次加载完成后标记
+      if (isFirstLoad.value) {
+        isFirstLoad.value = false
+      }
     }
   } catch (e) {
     console.error('加载数据失败:', e)
@@ -663,6 +685,10 @@ const stopRefresh = () => {
 }
 
 watch(activeTab, (newTab) => {
+  // 切换 tab 时重置缩放状态
+  userZoomState.value = null
+  isFirstLoad.value = true
+  
   if (newTab !== 'minute') {
     loadKlineData(newTab)
   }

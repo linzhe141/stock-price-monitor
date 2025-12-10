@@ -43,6 +43,30 @@ export const setFocusedStock = async (code: string) => {
   return response.data;
 };
 
+// 设置股票分组
+export const setStockGroup = async (code: string, group: string) => {
+  const response = await api.post(`/stocks/group/${code}`, { group });
+  return response.data;
+};
+
+// 获取所有分组
+export const getGroups = async () => {
+  const response = await api.get('/groups');
+  return response.data;
+};
+
+// 添加新分组
+export const addGroupApi = async (group: string) => {
+  const response = await api.post('/groups', { group });
+  return response.data;
+};
+
+// 删除分组
+export const deleteGroupApi = async (group: string, deleteStocks: boolean = false) => {
+  const response = await api.delete(`/groups/${encodeURIComponent(group)}`, { params: { delete_stocks: deleteStocks } });
+  return response.data;
+};
+
 // 设置股票预警
 export const setAlert = async (code: string, alertConfig: Record<string, any>) => {
   const response = await api.post(`/alerts/${code}`, alertConfig);

@@ -62,6 +62,23 @@ def reorder_stocks(data: dict):
 def set_focused_stock(code: str):
     return monitor.set_focused_stock(code)
 
+# 股票分组 API
+@app.post("/stocks/group/{code}")
+def set_stock_group(code: str, data: dict):
+    return monitor.set_stock_group(code, data.get("group", ""))
+
+@app.get("/groups")
+def get_groups():
+    return monitor.get_groups()
+
+@app.post("/groups")
+def add_group(data: dict):
+    return monitor.add_group(data.get("group", ""))
+
+@app.delete("/groups/{group}")
+def delete_group(group: str, delete_stocks: bool = False):
+    return monitor.delete_group(group, delete_stocks)
+
 # 预警相关 API
 @app.post("/alerts/{code}")
 def set_alert(code: str, alert_config: dict):

@@ -38,6 +38,14 @@ class StockMonitor:
         self.triggered_alerts: List[dict] = []
         # 重点关注的股票代码
         self.focused_stock: Optional[str] = None
+        # 股票分组: {code: group_name}
+        self.stock_groups: Dict[str, str] = {}
+        # 分组列表
+        self.group_list: List[str] = []
+        # 大盘指数数据
+        self.index_data: Dict[str, dict] = {}
+        # 大盘指数代码
+        self.index_codes = ["sh000001", "sz399001", "sz399006", "sh000300"]  # 上证、深证、创业板、沪深300
         
         self._load_data()
     
@@ -55,7 +63,9 @@ class StockMonitor:
                     data = json.load(f)
                     self.stocks = data.get('stocks', [])
                     self.focused_stock = data.get('focused_stock')
-                    print(f"已加载 {len(self.stocks)} 只股票, 重点关注: {self.focused_stock}")
+                    self.stock_groups = data.get('groups', {})
+                    self.group_list = data.get('group_list', [])
+                    print(f"已加载 {len(self.stocks)} 只股票, {len(self.group_list)} 个分组")
             except Exception as e:
                 print(f"加载股票列表失败: {e}")
         
@@ -84,7 +94,9 @@ class StockMonitor:
             with open(STOCKS_FILE, 'w', encoding='utf-8') as f:
                 json.dump({
                     'stocks': self.stocks,
-                    'focused_stock': self.focused_stock
+                    'focused_stock': self.focused_stock,
+                    'groups': self.stock_groups,
+                    'group_list': self.group_list
                 }, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"保存股票列表失败: {e}")
@@ -172,8 +184,119 @@ class StockMonitor:
             "data": self.data,
             "alerts": self.alerts,
             "focused_stock": focused,
-            "focused_data": focused_data
+            "focused_data": focused_data,
+            "groups": self.stock_groups,
+            "group_list": self.group_list,
+            "index_data": self.index_data
         }
+    
+    def set_stock_group(self, code: str, group: str):
+        """设置股票分组"""
+        if group:
+            self.stock_groups[code] = group
+            # 如果是新分组，添加到分组列表
+            if group not in self.group_list:
+                self.group_list.append(group)
+        elif code in self.stock_groups:
+            del self.stock_groups[code]
+        self._save_stocks()
+        return {"status": "success", "message": f"已设置 {code} 分组为 {group}"}
+    
+    def add_group(self, group: str):
+        """添加新分组"""
+        if group and group not in self.group_list:
+            self.group_list.append(group)
+            self._save_stocks()
+            return {"status": "success", "message": f"已添加分组 {group}"}
+        return {"status": "error", "message": "分组已存在或名称为空"}
+    
+    def get_groups(self):
+        """获取所有分组"""
+        return {"status": "success", "groups": self.group_list}
+    
+    def delete_group(self, group: str, delete_stocks: bool = False):
+        """删除分组
+        Args:
+            group: 分组名称
+            delete_stocks: 是否同时删除分组内的股票
+        """
+        if group not in self.group_list:
+            return {"status": "error", "message": "分组不存在"}
+        
+        # 找出该分组下的所有股票
+        stocks_in_group = [code for code, g in self.stock_groups.items() if g == group]
+        
+        if delete_stocks:
+            # 删除分组内的所有股票
+            for code in stocks_in_group:
+                if code in self.stocks:
+                    self.stocks.remove(code)
+                if code in self.data:
+                    del self.data[code]
+                if code in self.alerts:
+                    del self.alerts[code]
+                if code in self.stock_groups:
+                    del self.stock_groups[code]
+            self._save_alerts()
+        else:
+            # 仅移除股票的分组标记
+            for code in stocks_in_group:
+                if code in self.stock_groups:
+                    del self.stock_groups[code]
+        
+        # 从分组列表中移除
+        self.group_list.remove(group)
+        self._save_stocks()
+        
+        return {"status": "success", "message": f"已删除分组 {group}", "deleted_stocks": stocks_in_group if delete_stocks else []}
+    
+    def fetch_index_data(self):
+        """获取大盘指数数据"""
+        try:
+            codes_str = ",".join(self.index_codes)
+            url = f"http://hq.sinajs.cn/list={codes_str}"
+            headers = {
+                "Referer": "https://finance.sina.com.cn/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+            
+            resp = requests.get(url, headers=headers, timeout=5, proxies={"http": None, "https": None})
+            content = resp.content.decode('gbk')
+            
+            lines = content.strip().split('\n')
+            for line in lines:
+                if not line:
+                    continue
+                parts = line.split('=')
+                if len(parts) < 2:
+                    continue
+                
+                code_part = parts[0].split('_')[-1]
+                data_part = parts[1].strip('"')
+                if not data_part:
+                    continue
+                
+                fields = data_part.split(',')
+                if len(fields) < 4:
+                    continue
+                
+                name = fields[0]
+                price = float(fields[1]) if fields[1] else 0
+                pre_close = float(fields[2]) if fields[2] else 0
+                
+                change_percent = 0.0
+                if pre_close > 0:
+                    change_percent = (price - pre_close) / pre_close * 100
+                
+                self.index_data[code_part] = {
+                    "code": code_part,
+                    "name": name,
+                    "price": f"{price:.2f}",
+                    "change_percent": f"{change_percent:.2f}",
+                    "pre_close": f"{pre_close:.2f}"
+                }
+        except Exception as e:
+            print(f"获取大盘指数失败: {e}")
     
     def set_focused_stock(self, code: str):
         """设置重点关注的股票"""
@@ -513,6 +636,9 @@ class StockMonitor:
         self.running = True
         print("监控已启动")
         while self.running:
+            # 获取大盘指数
+            self.fetch_index_data()
+            # 获取股票数据
             if self.stocks:
                 self.fetch_data()
             time.sleep(self.settings.get("refresh_interval", 5))

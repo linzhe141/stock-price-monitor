@@ -59,7 +59,7 @@ function createFloatWindow() {
   if (VITE_DEV_SERVER_URL) {
     floatWin.loadURL(`${VITE_DEV_SERVER_URL}#/float`)
     // 开发模式下打开悬浮窗的 DevTools 用于调试
-    floatWin.webContents.openDevTools({ mode: 'detach' })
+    // floatWin.webContents.openDevTools({ mode: 'detach' })
   } else {
     floatWin.loadFile(path.join(process.env.DIST || '', 'index.html'), { hash: '/float' })
   }

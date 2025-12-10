@@ -1,7 +1,16 @@
 {
   "stocks": [
     "sz000592",
-    "reorder"
+    "reorder",
+    "sh601138"
   ],
-  "focused_stock": "sz000592"
+  "focused_stock": "sz000592",
+  "groups": {
+    "sz000592": "情绪",
+    "sh601138": "消费"
+  },
+  "group_list": [
+    "情绪",
+    "消费"
+  ]
 }

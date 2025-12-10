@@ -46,7 +46,6 @@ function createFloatWindow() {
   });
   if (VITE_DEV_SERVER_URL) {
     floatWin.loadURL(`${VITE_DEV_SERVER_URL}#/float`);
-    floatWin.webContents.openDevTools({ mode: "detach" });
   } else {
     floatWin.loadFile(path.join(process.env.DIST || "", "index.html"), { hash: "/float" });
   }
