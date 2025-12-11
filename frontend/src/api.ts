@@ -109,4 +109,24 @@ export const getMoneyFlow = async (code: string) => {
   return response.data;
 };
 
+// AI 分析
+export const analyzeStock = async (
+  code: string,
+  type: 'fast' | 'precise',
+  provider: string,
+  apiKey: string,
+  model: string,
+  inputs: Record<string, any> = {}
+) => {
+  const response = await api.post('/analyze', {
+    code,
+    type,
+    provider,
+    api_key: apiKey,
+    model,
+    inputs
+  });
+  return response.data;
+};
+
 export default api;

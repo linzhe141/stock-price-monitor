@@ -52,6 +52,32 @@
             </div>
           </div>
         </div>
+        
+        <!-- AI 设置 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+          <h2 class="text-lg font-semibold text-slate-700 mb-4">{{ $t('settings.ai_config') }}</h2>
+          <div class="space-y-4">
+             <div>
+               <label class="block text-sm font-medium text-slate-600 mb-2">{{ $t('settings.ai_provider') }}</label>
+               <select v-model="aiConfig.provider" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                 <option value="openai">OpenAI (GPT)</option>
+                 <option value="gemini">Google Gemini</option>
+                 <option value="claude">Anthropic Claude</option>
+               </select>
+             </div>
+             <div>
+               <label class="block text-sm font-medium text-slate-600 mb-2">API Key</label>
+               <input v-model="aiConfig.apiKey" type="password" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="sk-..." />
+             </div>
+             <div>
+               <label class="block text-sm font-medium text-slate-600 mb-2">{{ $t('settings.ai_model') }}</label>
+               <input v-model="aiConfig.model" type="text" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. gpt-4o, gemini-pro, claude-3-opus" />
+               <p class="text-xs text-slate-400 mt-1">
+                 默认推荐: OpenAI (gpt-3.5-turbo), Gemini (gemini-pro), Claude (claude-3-haiku-20240307)
+               </p>
+             </div>
+          </div>
+        </div>
 
         <!-- 推送设置 -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
@@ -137,6 +163,12 @@ const settings = ref({
   dingtalk_webhook: '',
 })
 
+const aiConfig = ref({
+  provider: 'openai',
+  apiKey: '',
+  model: ''
+})
+
 const saving = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
@@ -154,6 +186,12 @@ const loadSettings = async () => {
     if (res.status === 'success') {
       settings.value = { ...settings.value, ...res.settings }
     }
+
+    const savedAi = localStorage.getItem('ai_config')
+    if (savedAi) {
+      aiConfig.value = JSON.parse(savedAi)
+    }
+
   } catch (e) {
     console.error('加载设置失败:', e)
   }
@@ -165,6 +203,8 @@ const saveSettings = async () => {
   message.value = ''
   
   try {
+    localStorage.setItem('ai_config', JSON.stringify(aiConfig.value))
+    
     const res = await updateSettings(settings.value)
     if (res.status === 'success') {
       messageType.value = 'success'
@@ -190,6 +230,14 @@ const resetSettings = () => {
     pushplus_token: '',
     dingtalk_webhook: '',
   }
+  
+  aiConfig.value = {
+    provider: 'openai',
+    apiKey: '',
+    model: ''
+  }
+  localStorage.removeItem('ai_config')
+
 }
 
 onMounted(() => {

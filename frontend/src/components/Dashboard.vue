@@ -142,6 +142,7 @@
                   <button @click="handleSetFocus(stock.code)" 
                     :class="focusedStock === stock.code ? 'bg-amber-100 text-amber-600 border-amber-300' : 'text-slate-400 border-slate-200 hover:bg-amber-50'"
                     class="px-1.5 py-0.5 text-xs border rounded">⭐</button>
+                  <button @click="openAIModal(stock, 'fast')" class="px-1.5 py-0.5 text-xs text-purple-500 border border-purple-200 rounded hover:bg-purple-50" title="快速AI分析">AI</button>
                   <button @click="openAlertModal(stock)" class="px-1.5 py-0.5 text-xs text-blue-500 border border-blue-200 rounded hover:bg-blue-50">预警</button>
                   <button @click="handleRemoveStock(stock.code)" class="px-1.5 py-0.5 text-xs text-slate-500 border border-slate-200 rounded hover:bg-red-50 hover:text-red-500">删除</button>
                 </div>
@@ -229,6 +230,13 @@
         </div>
       </div>
     </div>
+    
+    <!-- AI 分析弹窗 -->
+    <AIAnalysisModal
+      v-model:visible="showAiModal"
+      :stock-code="aiStockCode"
+      :type="aiType"
+    />
   </div>
 </template>
 
@@ -236,6 +244,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getStocks, addStock, removeStock, getSettings, reorderStocks, setAlert, getTriggeredAlerts, setFocusedStock, setStockGroup, addGroupApi, deleteGroupApi } from '../api'
+import AIAnalysisModal from './AIAnalysisModal.vue'
 
 const { locale } = useI18n()
 const emit = defineEmits(['openSettings', 'openDetail'])
@@ -274,6 +283,17 @@ const groupContextMenu = ref({ show: false, x: 0, y: 0, group: '' })
 const showAlertModal = ref(false)
 const currentAlertStock = ref<any>(null)
 const alertForm = ref({ take_profit: '', stop_loss: '', change_alert: '', enabled: true })
+
+// AI 分析
+const showAiModal = ref(false)
+const aiStockCode = ref('')
+const aiType = ref<'fast' | 'precise'>('fast')
+
+const openAIModal = (stock: any, type: 'fast' | 'precise') => {
+  aiStockCode.value = stock.code
+  aiType.value = type
+  showAiModal.value = true
+}
 
 let intervalId: ReturnType<typeof setInterval> | null = null
 let alertCheckId: ReturnType<typeof setInterval> | null = null

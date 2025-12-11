@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from monitor import StockMonitor
 import uvicorn
 import threading
+from ai_service import AIService
+from pydantic import BaseModel
+from typing import Optional, Dict
 
 from contextlib import asynccontextmanager
 
@@ -109,5 +112,42 @@ def get_kline_data(code: str, period: str = "day", count: int = 120):
 def get_money_flow(code: str):
     return monitor.get_money_flow(code)
 
-if __name__ == "__main__":
+class AnalyzeRequest(BaseModel):
+    code: str
+    type: str  # fast | precise
+    provider: str
+    api_key: str
+    model: str
+    inputs: Optional[Dict] = {}
+
+@app.post("/analyze")
+def analyze_stock(req: AnalyzeRequest):
+    # Fetch data
+    stock_detail = monitor.get_stock_detail(req.code)
+    basic = stock_detail.get("basic", {})
+    
+    # Check if we have data
+    if not basic:
+        return {"status": "error", "message": "无法获取股票基本信息"}
+        
+    # Determine data range based on type
+    if req.type == "fast":
+        # Fast: 2 days minute, 6 month (120 days) kline
+        minute = monitor.get_minute_data(req.code).get("data", [])
+        kline = monitor.get_kline_data(req.code, "day", 120).get("data", [])
+    else:
+        # Precise: 3 days minute, 1 year (240 days) kline
+        # Note: standard minute data is usually 240 or 480 points (1-2 days). 
+        # Sina API usually returns limited history for minute data. We use what we can get.
+        minute = monitor.get_minute_data(req.code).get("data", []) 
+        kline = monitor.get_kline_data(req.code, "day", 240).get("data", [])
+        
+    # Format prompt
+    prompt = AIService.format_data_for_prompt(basic, minute, kline, req.inputs)
+    
+    # Call LLM
+    result = AIService.call_llm(req.provider, req.api_key, req.model, prompt)
+    
+    return {"status": "success", "result": result}
+
     uvicorn.run(app, host="127.0.0.1", port=8000)

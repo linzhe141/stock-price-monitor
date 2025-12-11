@@ -29,6 +29,9 @@ const zh = {
     dingtalk_webhook: '钉钉机器人 Webhook',
     dingtalk_placeholder: '请输入钉钉机器人 Webhook URL',
     dingtalk_hint: '用于钉钉群推送预警消息',
+    ai_config: 'AI 模型配置',
+    ai_provider: '模型提供商',
+    ai_model: '模型名称 (Model Name)',
   },
   float: {
     title: '股票监控',
